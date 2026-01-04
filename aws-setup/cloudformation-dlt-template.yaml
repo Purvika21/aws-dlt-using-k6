@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Distributed Load Testing (DLT) stack using EC2 and k6
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    Description: EC2 instance type for load generators
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: EC2 Key Pair for SSH access
+
+  InstanceCount:
+    Type: Number
+    Default: 2
+    Description: Number of EC2 instances for DLT
+
+Resources:
+  DLTSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+  DLTLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: ami-0f3c7d07486cad139
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        SecurityGroupIds:
+          - !Ref DLTSecurityGroup
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            sudo dnf update -y
+            sudo dnf install -y https://dl.k6.io/rpm/repo.rpm
+            sudo dnf install -y k6
+
+  DLTASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: !Ref InstanceCount
+      MaxSize: !Ref InstanceCount
+      DesiredCapacity: !Ref InstanceCount
+      LaunchTemplate:
+        LaunchTemplateId: !Ref DLTLaunchTemplate
+        Version: !GetAtt DLTLaunchTemplate.LatestVersionNumber
+      VPCZoneIdentifier:
+        - subnet-xxxxxxxx
+
+Outputs:
+  StackStatus:
+    Value: DLT CloudFormation stack created successfully
